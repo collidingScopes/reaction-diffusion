@@ -1,0 +1,75 @@
+<!--
+Set the a/b value gamma correction as dat.gui parameters
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reaction Diffusion Animation</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js"></script>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  
+    <meta property="og:title" content="Particular Drift" />
+    <meta property="og:description" content="Turn images into flowing particle animations" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://collidingscopes.github.io/particular-drift" />
+    <meta property="og:image" content="https://collidingscopes.github.io/particular-drift/assets/siteOGImage.png">
+    <meta property="og:image:type" content="image/png" >
+    <meta property="og:image:width" content="784" >
+    <meta property="og:image:height" content="784" >
+  
+    <link rel="icon" href="assets/siteFavicon3.png">
+    <link rel="apple-touch-icon" href="assets/siteFavicon3.png">
+
+    <script defer src="https://cloud.umami.is/script.js" data-website-id="eb59c81c-27cb-4e1d-9e8c-bfbe70c48cd9"></script>
+</head>
+<body>    
+    <canvas id="canvas"></canvas>
+    <div id="videoRecordingMessageDiv" class="hidden sticky-top">
+        Video recording underway. Press menu button or "v" to stop. The video will save to your downloads folder after.
+    </div>
+    <button id="addDropBtn" class="custom-button">Add Random Drop</button>
+    
+    <div class="instructions" style="max-width: 800px; margin: 20px; background: #1e1e1e; padding: 20px; border-radius: 8px; line-height: 1.6;">
+        <h3 style="margin-top: 0;">How to Use This Simulation</h3>
+        <ul style="padding-left: 20px;">
+            <li><strong>Click on the canvas</strong> to add patterns of chemical B</li>
+            <li><strong>Use the dat.GUI controls</strong> to change simulation parameters in real-time:
+                <ul style="margin-top: 5px;">
+                    <li>Feed rate (F) and Kill rate (k) determine the pattern type</li>
+                    <li>Diffusion rates control how quickly chemicals A and B spread</li>
+                    <li>Time step affects ONLY simulation speed (not pattern formation)</li>
+                    <li>Colors allow you to customize the visualization</li>
+                </ul>
+            </li>
+            <li><strong>Visualization modes:</strong>
+                <ul style="margin-top: 5px;">
+                    <li>Chemical A (red) - substrate that gets consumed</li>
+                    <li>Chemical B (blue) - reactant that consumes A and replicates</li>
+                    <li>Blend mode shows interaction between A and B</li>
+                </ul>
+            </li>
+            <li><strong>Try these patterns:</strong>
+                <ul style="margin-top: 5px;">
+                    <li>Coral-like patterns: F=0.055, k=0.062 (default)</li>
+                    <li>Spots: F=0.03, k=0.062</li>
+                    <li>Fingerprint-like stripes: F=0.030, k=0.059</li>
+                    <li>Maze patterns: F=0.029, k=0.057</li>
+                    <li>Bubbles: F=0.010, k=0.045</li>
+                </ul>
+            </li>
+            <li>The simulation uses the <strong>Gray-Scott model</strong>, which mimics patterns found in nature</li>
+        </ul>
+    </div>
+
+</body>
+
+<script src="mp4-muxer-main/build/mp4-muxer.js"></script>
+<script src="canvasVideoExport.js"></script>
+<script src="main.js"></script>
+
+</html>
