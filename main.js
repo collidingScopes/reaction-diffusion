@@ -1,3 +1,14 @@
+/*
+To do:
+Set the a/b value gamma correction as dat.gui parameters
+More range of colors / gradient between two colors for chemical B
+Improve performance / frame rate
+Better preset functionality
+Better way of finding nice / moving / evolving combination of input parameters
+r to randomize inputs, enter to reset animation
+add parameters for random noise in X/Y directions
+*/
+
 // Canvas setup
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d', { alpha: false }); // Optimization 1: Disable alpha for better performance
@@ -15,9 +26,18 @@ canvas.height = size;
 let previousImageData = null;
 let imageDataBuffer = null; // Optimization 2: Reuse imageData buffer
 
+// Presets for patterns
+const presets = {
+  coral: {dA: 1.50, dB: 2.00, feed: 0.031, kill: 0.048},
+  wormHole: {dA: 1.56, dB: 1.55, feed: 0.048, kill: 0.041},
+  eddy: {dA: 1.50, dB: 1.70, feed: 0.035, kill: 0.043},
+  swirl: {dA: 1.16, dB: 2.00, feed: 0.17, kill: 0.014},
+};
+
 // Parameters for the reaction-diffusion simulation
 let gui;
 const params = {
+    preset: 'coral',
     resolution: 3,
     dA: 1.54,                // Diffusion rate for chemical A
     dB: 1.99,                // Diffusion rate for chemical B
@@ -39,9 +59,6 @@ const params = {
     randomDrops: false,      // Enable random drops
     dropInterval: 1000,      // Milliseconds between random drops
     colorSmoothing: 0.2,     // Color smoothing factor
-    
-    // Presets
-    preset: 'coral',
     
     // Functions
     resetSimulation: function() {
@@ -75,16 +92,7 @@ let animationId = null;
 let lastRandomDrop = 0;
 let lastFrameTime = 0; // Optimization 4: Track frame times for FPS management
 
-// Presets for patterns
-const presets = {
-    coral: { feed: 0.0545, kill: 0.062 },
-    spots: { feed: 0.028, kill: 0.062 },
-    stripes: { feed: 0.030, kill: 0.059 },
-    maze: { feed: 0.029, kill: 0.057 },
-    bubbles: { feed: 0.012, kill: 0.045 },
-    chaos: { feed: 0.026, kill: 0.051 },
-    subtle: { feed: 0.039, kill: 0.058 }
-};
+
 
 // Initialize the grid
 function initGrid() {
@@ -391,12 +399,12 @@ function setupControls() {
     gui = new dat.GUI({ autoPlace: true, width: 300 });
     
     // Create folders for organization
+    const presetsFolder = gui.addFolder('Preset Patterns');
     const generalFolder = gui.addFolder('Simulation Controls');
     const patternFolder = gui.addFolder('Pattern Parameters');
     const visualFolder = gui.addFolder('Visualization Controls');
     const colorFolder = gui.addFolder('Color Controls');
     const dropFolder = gui.addFolder('Drop Controls');
-    const presetsFolder = gui.addFolder('Preset Patterns');
     
     // Optimization 24: Add FPS display
     const fpsDiv = document.createElement('div');
@@ -426,6 +434,28 @@ function setupControls() {
         requestAnimationFrame(updateFPS);
     }
     requestAnimationFrame(updateFPS);
+
+    // Presets dropdown
+    const presetOptions = Object.keys(presets);
+    presetsFolder.add(params, 'preset', presetOptions).name('Pattern Presets')
+        .onChange((value) => {
+            if (presets[value]) {
+                const preset = presets[value];
+                params.dA = preset.dA;
+                params.dB = preset.dB;
+                params.feed = preset.feed;
+                params.kill = preset.kill;
+
+                // Update the GUI controllers
+                for (let i = 0; i < gui.__controllers.length; i++) {
+                    gui.__controllers[i].updateDisplay();
+                }
+                
+                // Reset the simulation
+                initGrid();
+            }
+        });
+    presetsFolder.open();
     
     // Pattern Parameters
     patternFolder.add(params, 'dA', 0.1, 2.5).name('Diffusion A').step(0.01);
@@ -466,25 +496,6 @@ function setupControls() {
     generalFolder.add(params, 'resetSimulation').name('Reset Simulation');
     generalFolder.add(params, 'addDrop').name('Add Random Drop');
     generalFolder.open();
-    
-    // Presets dropdown
-    const presetOptions = Object.keys(presets);
-    presetsFolder.add(params, 'preset', presetOptions).name('Pattern Presets')
-        .onChange((value) => {
-            if (presets[value]) {
-                const preset = presets[value];
-                params.feed = preset.feed;
-                params.kill = preset.kill;
-                
-                // Update the GUI controllers
-                for (let i = 0; i < gui.__controllers.length; i++) {
-                    gui.__controllers[i].updateDisplay();
-                }
-                
-                // Reset the simulation
-                initGrid();
-            }
-        });
     
     // Set up the Add Drop button event handler
     document.getElementById('addDropBtn').addEventListener('click', () => {
