@@ -1,14 +1,3 @@
-/*
-To do:
-Set the a/b value gamma correction as dat.gui parameters
-More range of colors / gradient between two colors for chemical B
-Improve performance / frame rate
-Better preset functionality
-Better way of finding nice / moving / evolving combination of input parameters
-r to randomize inputs, enter to reset animation
-add parameters for random noise in X/Y directions
-*/
-
 // Canvas setup
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d', { alpha: false }); // Optimization 1: Disable alpha for better performance
@@ -44,6 +33,7 @@ const params = {
     dB: 1.99,                // Diffusion rate for chemical B
     feed: 0.031,             // Feed rate
     kill: 0.048,             // Kill rate
+    timeStep: 0.2,           // Added a time step parameter (reduced from 0.8 to 0.2)
     paused: false,           // Animation state
     
     // Visualization mode
@@ -84,8 +74,6 @@ let next = [];
 let animationId = null;
 let lastRandomDrop = 0;
 let lastFrameTime = 0; // Optimization 4: Track frame times for FPS management
-
-
 
 // Initialize the grid
 function initGrid() {
@@ -226,7 +214,7 @@ function computeStep() {
     const KILL = params.kill;
     const DA = params.dA;
     const DB = params.dB;
-    const FIXED_DT = 0.8; // Fixed time step for pattern formation
+    const DT = params.timeStep;
     
     // For each cell
     for (let i = 0; i < cols; i++) {
@@ -250,9 +238,9 @@ function computeStep() {
             // Gray-Scott model formula
             const reaction = a * b * b;
             
-            // Update values using the model's equations with FIXED dt
-            next[i][j].a = a + (DA * laplaceA - reaction + FEED * (1 - a)) * FIXED_DT;
-            next[i][j].b = b + (DB * laplaceB + reaction - (KILL + FEED) * b) * FIXED_DT;
+            // Update values using the model's equations with variable dt
+            next[i][j].a = a + (DA*(0.8/DT) * laplaceA - reaction + FEED * (1 - a)) * DT;
+            next[i][j].b = b + (DB*(0.8/DT) * laplaceB + reaction - (KILL + FEED) * b) * DT;
             
             // Constrain values to ensure stability
             next[i][j].a = Math.max(0, Math.min(1, next[i][j].a));
@@ -445,6 +433,8 @@ function setupControls() {
     
     patternFolder.add(params, 'feed', 0.001, 0.4).name('Feed Rate (F)').step(0.001);
     patternFolder.add(params, 'kill', 0.001, 0.4).name('Kill Rate (k)').step(0.001);
+
+    generalFolder.add(params, 'timeStep', 0.01, 1.0).name('Animation Speed').step(0.01);
 
     // Optimization 25: Handle resolution changes correctly
     patternFolder.add(params, 'resolution', 1, 10).name('Resolution').step(1)
