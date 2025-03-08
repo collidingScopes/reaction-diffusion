@@ -32,6 +32,7 @@ const presets = {
   wormHole: {dA: 1.56, dB: 1.55, feed: 0.048, kill: 0.041},
   eddy: {dA: 1.50, dB: 1.70, feed: 0.035, kill: 0.043},
   swirl: {dA: 1.16, dB: 2.00, feed: 0.17, kill: 0.014},
+  maze: {dA: 1.53, dB: 1.8, feed: 0.083, kill: 0.186},
 };
 
 // Parameters for the reaction-diffusion simulation
@@ -43,9 +44,6 @@ const params = {
     dB: 1.99,                // Diffusion rate for chemical B
     feed: 0.031,             // Feed rate
     kill: 0.048,             // Kill rate
-    //dt: 5,                 // Time step - now purely for animation speed
-    //stepsPerFrame: 1,        // Number of simulation steps per frame
-    simulationSpeed: 1,
     paused: false,           // Animation state
     
     // Visualization mode
@@ -59,11 +57,6 @@ const params = {
     randomDrops: false,      // Enable random drops
     dropInterval: 1000,      // Milliseconds between random drops
     colorSmoothing: 0.2,     // Color smoothing factor
-    
-    // Functions
-    resetSimulation: function() {
-        initGrid();
-    },
     
     // Add drop button (handled separately)
     addDrop: function() {
@@ -365,17 +358,6 @@ function animate(timestamp) {
     lastFrameTime = timestamp - (elapsed % FRAME_TIME);
     
     if (!params.paused) {
-        // Optimization 22: Adaptive steps based on actual frame rate
-        //const fps = 1000 / Math.max(1, elapsed);
-        //const targetSteps = params.dt / 500 * params.stepsPerFrame;
-        //const stepsToRun = Math.max(1, Math.round(targetSteps * (60 / fps))); 
-        /*
-        const stepsToRun = Math.max(1, Math.round(params.simulationSpeed));
-
-        for (let i = 0; i < stepsToRun; i++) {
-            computeStep();
-        }
-        */
         computeStep();
         
         // Handle random drops if enabled
@@ -471,11 +453,6 @@ function setupControls() {
         });
 
     patternFolder.open();
-    
-    // Simulation Speed (renamed)
-    //generalFolder.add(params, 'dt', 1, 10).name('Animation Speed').step(0.1);
-    //generalFolder.add(params, 'stepsPerFrame', 1, 10).name('Steps Per Frame').step(1);
-    generalFolder.add(params, 'simulationSpeed', 0.1, 10).name('Simulation Speed').step(0.1);
 
     // Visualization Controls
     visualFolder.add(params, 'visualizationMode', ['a', 'b', 'blend', 'subtract']).name('View Mode');
@@ -493,8 +470,6 @@ function setupControls() {
     
     // Simulation Controls
     generalFolder.add(params, 'paused').name('Pause Simulation');
-    generalFolder.add(params, 'resetSimulation').name('Reset Simulation');
-    generalFolder.add(params, 'addDrop').name('Add Random Drop');
     generalFolder.open();
     
     // Set up the Add Drop button event handler
@@ -520,7 +495,7 @@ function setupControls() {
         event.preventDefault();
         togglePlayPause();
       } else if(event.key === 'Enter'){
-        //safeRestartAnimation();
+        restartAnimation();
       } else if(event.key === 'r'){
         randomizeInputs();
       } else if(event.key === 'u'){
@@ -607,6 +582,28 @@ document.addEventListener('visibilitychange', () => {
 
 function randomizeInputs() {
     // Implementation would go here
+}
+
+function restartAnimation() {
+    // Cancel the current animation frame if it exists
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+    }
+    
+    // Reset the grid to initial state with current parameters
+    initGrid();
+    
+    // Reset visualization state
+    previousImageData = null;
+    imageDataBuffer = new ImageData(canvas.width, canvas.height);
+    
+    // Reset timing variables
+    lastRandomDrop = performance.now();
+    lastFrameTime = performance.now();
+    
+    // Restart the animation loop
+    animate(performance.now());
 }
 
 // Start everything
