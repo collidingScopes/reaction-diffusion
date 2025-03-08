@@ -57,7 +57,7 @@ function toggleVideoRecord(){
 }
 
 function chooseRecordingFunction(){
-  //safeRestartAnimation();
+  restartAnimation();
 
   if(isIOS || isAndroid || isFirefox){
     startMobileRecording();

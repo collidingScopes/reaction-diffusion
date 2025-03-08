@@ -15,6 +15,23 @@ canvas.height = size;
 let previousImageData = null;
 let imageDataBuffer = null; // Optimization 2: Reuse imageData buffer
 
+let aColorRGB = [0, 0, 0];
+let bColorRGB = [0, 0, 255];
+
+// Grid resolution
+resolution = 3;
+cols = Math.floor(canvas.width / resolution);
+rows = Math.floor(canvas.height / resolution);
+
+// Create grid with two chemicals: A and B
+let grid = [];
+let next = [];
+
+// Animation state tracking
+let animationId = null;
+let lastRandomDrop = 0;
+let lastFrameTime = 0; // Optimization 4: Track frame times for FPS management
+
 // Presets for patterns
 const presets = {
   coral: {dA: 1.50, dB: 2.00, feed: 0.031, kill: 0.048},
@@ -33,7 +50,7 @@ const params = {
     dB: 1.99,                // Diffusion rate for chemical B
     feed: 0.031,             // Feed rate
     kill: 0.048,             // Kill rate
-    timeStep: 0.2,           // Added a time step parameter (reduced from 0.8 to 0.2)
+    timeStep: 0.7,           // Added a time step parameter (reduced from 0.8 to 0.2)
     paused: false,           // Animation state
     
     // Visualization mode
@@ -47,7 +64,8 @@ const params = {
     randomDrops: false,      // Enable random drops
     dropInterval: 1000,      // Milliseconds between random drops
     colorSmoothing: 0.2,     // Color smoothing factor
-    
+    colorThreshold: 0.8,
+
     // Add drop button (handled separately)
     addDrop: function() {
         const x = Math.random() * cols;
@@ -57,23 +75,140 @@ const params = {
     }
 };
 
-// Optimization 3: Precalculate color values
-let aColorRGB = [0, 0, 0];
-let bColorRGB = [0, 0, 255];
+// Setup dat.GUI controls
+function setupControls() {
+    gui = new dat.GUI({ autoPlace: true, width: 300 });
+    
+    // Create folders for organization
+    const presetsFolder = gui.addFolder('Preset Patterns');
+    const generalFolder = gui.addFolder('Simulation Controls');
+    const patternFolder = gui.addFolder('Pattern Parameters');
+    const visualFolder = gui.addFolder('Visualization Controls');
+    const colorFolder = gui.addFolder('Color Controls');
+    const dropFolder = gui.addFolder('Drop Controls');
+    
+    // Optimization 24: Add FPS display
+    const fpsDiv = document.createElement('div');
+    fpsDiv.style.position = 'absolute';
+    fpsDiv.style.top = '5px';
+    fpsDiv.style.left = '5px';
+    fpsDiv.style.backgroundColor = 'rgba(0,0,0,0.5)';
+    fpsDiv.style.color = 'white';
+    fpsDiv.style.padding = '5px';
+    document.body.appendChild(fpsDiv);
+    
+    let frameCount = 0;
+    let lastFpsUpdate = 0;
+    let currentFps = 0;
+    
+    // Update FPS counter
+    function updateFPS(timestamp) {
+        frameCount++;
+        
+        if (timestamp - lastFpsUpdate > 1000) {
+            currentFps = Math.round(frameCount * 1000 / (timestamp - lastFpsUpdate));
+            fpsDiv.textContent = `FPS: ${currentFps}`;
+            frameCount = 0;
+            lastFpsUpdate = timestamp;
+        }
+        
+        requestAnimationFrame(updateFPS);
+    }
+    requestAnimationFrame(updateFPS);
 
-// Grid resolution
-resolution = params.resolution;
-cols = Math.floor(canvas.width / resolution);
-rows = Math.floor(canvas.height / resolution);
+    // Presets dropdown
+    const presetOptions = Object.keys(presets);
+    presetsFolder.add(params, 'preset', presetOptions).name('Pattern Presets')
+        .onChange((value) => {
+            if (presets[value]) {
+                const preset = presets[value];
+                params.dA = preset.dA;
+                params.dB = preset.dB;
+                params.feed = preset.feed;
+                params.kill = preset.kill;
 
-// Create grid with two chemicals: A and B
-let grid = [];
-let next = [];
+                // Update the GUI controllers
+                for (let i = 0; i < gui.__controllers.length; i++) {
+                    gui.__controllers[i].updateDisplay();
+                }
+                
+                // Reset the simulation
+                initGrid();
+            }
+        });
+    presetsFolder.open();
+    
+    // Pattern Parameters
+    patternFolder.add(params, 'dA', 0.1, 10.0).name('Diffusion A').step(0.01);
+    patternFolder.add(params, 'dB', 0.1, 10.0).name('Diffusion B').step(0.01);
+    
+    patternFolder.add(params, 'feed', 0.001, 0.4).name('Feed Rate (F)').step(0.001);
+    patternFolder.add(params, 'kill', 0.001, 0.4).name('Kill Rate (k)').step(0.001);
 
-// Animation state tracking
-let animationId = null;
-let lastRandomDrop = 0;
-let lastFrameTime = 0; // Optimization 4: Track frame times for FPS management
+    generalFolder.add(params, 'timeStep', 0.01, 1.0).name('Animation Speed').step(0.01);
+
+    // Optimization 25: Handle resolution changes correctly
+    patternFolder.add(params, 'resolution', 1, 10).name('Resolution').step(1)
+        .onChange(() => {
+            initGrid();
+        });
+
+    patternFolder.open();
+
+    // Visualization Controls
+    visualFolder.add(params, 'visualizationMode', ['a', 'b', 'blend', 'subtract']).name('View Mode');
+    visualFolder.add(params, 'colorSmoothing', 0, 0.95).name('Temporal Smoothing').step(0.05);
+    visualFolder.add(params, 'colorThreshold', 0, 1.00).name('Color Threshold').step(0.01);
+    visualFolder.open();
+    
+    // Color Controls - single color picker for each chemical
+    addColorPicker(colorFolder, 'aColorHex', 'Chemical A Color');
+    addColorPicker(colorFolder, 'bColorHex', 'Chemical B Color');
+    
+    // Drop Controls
+    dropFolder.add(params, 'dropSize', 1, 30).name('Drop Size').step(1);
+    dropFolder.add(params, 'randomDrops').name('Random Drops');
+    dropFolder.add(params, 'dropInterval', 100, 5000).name('Drop Interval (ms)').step(100);
+    
+    // Simulation Controls
+    generalFolder.add(params, 'paused').name('Pause Simulation');
+    generalFolder.open();
+    
+    // Set up the Add Drop button event handler
+    document.getElementById('addDropBtn').addEventListener('click', () => {
+        params.addDrop();
+    });
+    
+    // Add click event to canvas for adding drops
+    canvas.addEventListener('click', (event) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / resolution;
+        const y = (event.clientY - rect.top) / resolution;
+        addDropPattern(x, y);
+    });
+
+    // Event listeners for keyboard shortcuts
+    document.addEventListener('keydown', function(event) {
+      if (event.key === 's') {
+        saveImage();
+      } else if (event.key === 'v') {
+        toggleVideoRecord();
+      } else if (event.code === 'Space') {
+        event.preventDefault();
+        togglePlayPause();
+      } else if(event.key === 'Enter'){
+        restartAnimation();
+      } else if(event.key === 'r'){
+        randomizeInputs();
+      } else if(event.key === 'u'){
+        imageInput.click();
+      } else if(event.key === 'c'){
+        chooseRandomPalette();
+      }
+    });
+
+    return gui;
+}
 
 // Initialize the grid
 function initGrid() {
@@ -157,6 +292,15 @@ function valuesToColor(a, b, outObj) {
     const aValue = Math.pow(a, 0.3);
     const bValue = Math.pow(b, 0.3);
     
+    if (aValue < params.colorThreshold) {
+        // If below threshold, show only chemical A at full opacity
+        outObj.r = aColorRGB[0];
+        outObj.g = aColorRGB[1];
+        outObj.b = aColorRGB[2];
+        return;
+    }
+    
+    // Otherwise proceed with normal visualization based on mode
     switch (params.visualizationMode) {
         case 'a':
             // Only show chemical A
@@ -364,139 +508,6 @@ function addColorPicker(folder, paramName, label) {
     folder.addColor(params, paramName).name(label).onChange(updateColorCache);
 }
 
-// Setup dat.GUI controls
-function setupControls() {
-    gui = new dat.GUI({ autoPlace: true, width: 300 });
-    
-    // Create folders for organization
-    const presetsFolder = gui.addFolder('Preset Patterns');
-    const generalFolder = gui.addFolder('Simulation Controls');
-    const patternFolder = gui.addFolder('Pattern Parameters');
-    const visualFolder = gui.addFolder('Visualization Controls');
-    const colorFolder = gui.addFolder('Color Controls');
-    const dropFolder = gui.addFolder('Drop Controls');
-    
-    // Optimization 24: Add FPS display
-    const fpsDiv = document.createElement('div');
-    fpsDiv.style.position = 'absolute';
-    fpsDiv.style.top = '5px';
-    fpsDiv.style.left = '5px';
-    fpsDiv.style.backgroundColor = 'rgba(0,0,0,0.5)';
-    fpsDiv.style.color = 'white';
-    fpsDiv.style.padding = '5px';
-    document.body.appendChild(fpsDiv);
-    
-    let frameCount = 0;
-    let lastFpsUpdate = 0;
-    let currentFps = 0;
-    
-    // Update FPS counter
-    function updateFPS(timestamp) {
-        frameCount++;
-        
-        if (timestamp - lastFpsUpdate > 1000) {
-            currentFps = Math.round(frameCount * 1000 / (timestamp - lastFpsUpdate));
-            fpsDiv.textContent = `FPS: ${currentFps}`;
-            frameCount = 0;
-            lastFpsUpdate = timestamp;
-        }
-        
-        requestAnimationFrame(updateFPS);
-    }
-    requestAnimationFrame(updateFPS);
-
-    // Presets dropdown
-    const presetOptions = Object.keys(presets);
-    presetsFolder.add(params, 'preset', presetOptions).name('Pattern Presets')
-        .onChange((value) => {
-            if (presets[value]) {
-                const preset = presets[value];
-                params.dA = preset.dA;
-                params.dB = preset.dB;
-                params.feed = preset.feed;
-                params.kill = preset.kill;
-
-                // Update the GUI controllers
-                for (let i = 0; i < gui.__controllers.length; i++) {
-                    gui.__controllers[i].updateDisplay();
-                }
-                
-                // Reset the simulation
-                initGrid();
-            }
-        });
-    presetsFolder.open();
-    
-    // Pattern Parameters
-    patternFolder.add(params, 'dA', 0.1, 2.5).name('Diffusion A').step(0.01);
-    patternFolder.add(params, 'dB', 0.1, 5.0).name('Diffusion B').step(0.01);
-    
-    patternFolder.add(params, 'feed', 0.001, 0.4).name('Feed Rate (F)').step(0.001);
-    patternFolder.add(params, 'kill', 0.001, 0.4).name('Kill Rate (k)').step(0.001);
-
-    generalFolder.add(params, 'timeStep', 0.01, 1.0).name('Animation Speed').step(0.01);
-
-    // Optimization 25: Handle resolution changes correctly
-    patternFolder.add(params, 'resolution', 1, 10).name('Resolution').step(1)
-        .onChange(() => {
-            initGrid();
-        });
-
-    patternFolder.open();
-
-    // Visualization Controls
-    visualFolder.add(params, 'visualizationMode', ['a', 'b', 'blend', 'subtract']).name('View Mode');
-    visualFolder.add(params, 'colorSmoothing', 0, 0.95).name('Temporal Smoothing').step(0.05);
-    visualFolder.open();
-    
-    // Color Controls - single color picker for each chemical
-    addColorPicker(colorFolder, 'aColorHex', 'Chemical A Color');
-    addColorPicker(colorFolder, 'bColorHex', 'Chemical B Color');
-    
-    // Drop Controls
-    dropFolder.add(params, 'dropSize', 1, 30).name('Drop Size').step(1);
-    dropFolder.add(params, 'randomDrops').name('Random Drops');
-    dropFolder.add(params, 'dropInterval', 100, 5000).name('Drop Interval (ms)').step(100);
-    
-    // Simulation Controls
-    generalFolder.add(params, 'paused').name('Pause Simulation');
-    generalFolder.open();
-    
-    // Set up the Add Drop button event handler
-    document.getElementById('addDropBtn').addEventListener('click', () => {
-        params.addDrop();
-    });
-    
-    // Add click event to canvas for adding drops
-    canvas.addEventListener('click', (event) => {
-        const rect = canvas.getBoundingClientRect();
-        const x = (event.clientX - rect.left) / resolution;
-        const y = (event.clientY - rect.top) / resolution;
-        addDropPattern(x, y);
-    });
-
-    // Event listeners for keyboard shortcuts
-    document.addEventListener('keydown', function(event) {
-      if (event.key === 's') {
-        saveImage();
-      } else if (event.key === 'v') {
-        toggleVideoRecord();
-      } else if (event.code === 'Space') {
-        event.preventDefault();
-        togglePlayPause();
-      } else if(event.key === 'Enter'){
-        restartAnimation();
-      } else if(event.key === 'r'){
-        randomizeInputs();
-      } else if(event.key === 'u'){
-        imageInput.click();
-      } else if(event.key === 'c'){
-        chooseRandomPalette();
-      }
-    });
-
-    return gui;
-}
 
 function togglePlayPause() {
     params.paused = !params.paused;
