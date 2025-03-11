@@ -64,7 +64,7 @@ const params = {
     randomDrops: false,      // Enable random drops
     dropInterval: 1000,      // Milliseconds between random drops
     colorSmoothing: 0.2,     // Color smoothing factor
-    colorThreshold: 0.8,
+    colorThreshold: 0.2,
 
     // Add drop button (handled separately)
     addDrop: function() {
@@ -158,7 +158,7 @@ function setupControls() {
     // Visualization Controls
     visualFolder.add(params, 'visualizationMode', ['a', 'b', 'blend', 'subtract']).name('View Mode');
     visualFolder.add(params, 'colorSmoothing', 0, 0.95).name('Temporal Smoothing').step(0.05);
-    visualFolder.add(params, 'colorThreshold', 0, 1.00).name('Color Threshold').step(0.01);
+    visualFolder.add(params, 'colorThreshold', 0, 0.8).name('Color Threshold').step(0.01);
     visualFolder.open();
     
     // Color Controls - single color picker for each chemical
@@ -292,14 +292,13 @@ function valuesToColor(a, b, outObj) {
     const aValue = Math.pow(a, 0.3);
     const bValue = Math.pow(b, 0.3);
     
-    if (aValue < params.colorThreshold) {
-        // If below threshold, show only chemical A at full opacity
+    if(aValue <= params.colorThreshold || bValue <= params.colorThreshold || aValue == 1 || bValue == 1){
         outObj.r = aColorRGB[0];
         outObj.g = aColorRGB[1];
         outObj.b = aColorRGB[2];
         return;
     }
-    
+
     // Otherwise proceed with normal visualization based on mode
     switch (params.visualizationMode) {
         case 'a':
@@ -370,13 +369,12 @@ function computeStep() {
             let laplaceA = 0;
             let laplaceB = 0;
             
-            // Optimization 14: Simplified laplacian calculation using precomputed stencil
             for (const point of STENCIL) {
                 const ni = (i + point.di + cols) % cols;
                 const nj = (j + point.dj + rows) % rows;
                 
-                laplaceA += grid[ni][nj].a * point.weight;
-                laplaceB += grid[ni][nj].b * point.weight;
+                laplaceA += grid[ni][nj].a * (point.weight);
+                laplaceB += grid[ni][nj].b * (point.weight);
             }
             
             // Gray-Scott model formula
